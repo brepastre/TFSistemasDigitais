@@ -1,0 +1,165 @@
+module fsm_genius (
+  input SW0, clk, rst, btn_pressionado, fim_ent, fim_ex, resultado_comparado, timeout, led_final,
+  input [3:0] nivel_atual, 
+  output reg enable, write_enable, sel_read_addr, clr_nivel, inc_nivel, clr_cnt_ex, inc_cnt_ex, clr_cnt_ent, inc_cnt_ent, clr_timer, timer_enable,
+  output reg [3:0] write_adress,
+  output reg [2:0] estado_atual
+);
+    parameter IDLE = 3'd0;
+    parameter EXIBICAO = 3'd1;  
+  	parameter ENTRADA = 3'd2; 
+  	parameter VITORIA = 3'd3; 
+    parameter DERROTA = 3'd4; 
+
+    reg [2:0] estadoA, estadoP;
+  	always @(*) begin
+        estado_atual = estadoA;
+    end
+  
+  // Lógica de transição de estados
+    always @(posedge clk or posedge rst) begin
+        if(rst)
+            estadoA <= IDLE;
+        else
+            estadoA <= estadoP;
+    end
+    
+  // Lógica de próximo estado
+    always @(*) begin
+        estadoP = estadoA;
+        case(estadoA)
+            IDLE:
+              if(SW0) 
+                estadoP = EXIBICAO; 
+          	  else
+                estadoP = IDLE;                  
+            EXIBICAO:
+              if(led_final && fim_ex)      
+                estadoP = ENTRADA; 
+              else if(led_final && !fim_ex)   
+                estadoP = EXIBICAO;
+	          else
+                estadoP = EXIBICAO;   	
+            ENTRADA:
+              if(btn_pressionado && resultado_comparado && fim_ent && (nivel_atual < 4'd15))    
+                estadoP = EXIBICAO;
+                 else if(timeout && !btn_pressionado)         					estadoP = ENTRADA;
+                 else if(btn_pressionado && resultado_comparado && !fim_ent)
+                estadoP = ENTRADA;
+                 else if(btn_pressionado && resultado_comparado && fim_ent && (nivel_atual == 4'd15))
+                estadoP = VITORIA;
+                 else if(timeout || (btn_pressionado && !resultado_comparado))
+                 estadoP = DERROTA;
+            VITORIA:
+              if(SW0)
+                estadoP = VITORIA;
+          	  else
+                estadoP = IDLE; 
+            DERROTA:
+              if(SW0)
+                estadoP = DERROTA;
+          	  else
+          		estadoP = IDLE;
+            default:
+                estadoP = IDLE;
+        endcase
+    end
+    
+  //Lógica de saídas
+    always @(*) begin
+        enable = 1'b0;
+        write_enable = 1'b0;
+        sel_read_addr = 1'b0;
+        clr_nivel = 1'b0; 
+        inc_nivel = 1'b0; 
+        clr_cnt_ex = 1'b0;
+        inc_cnt_ex = 1'b0;
+        clr_cnt_ent = 1'b0;
+        inc_cnt_ent = 1'b0;
+        clr_timer = 1'b0;
+        timer_enable = 1'b0;
+        write_adress = 4'b0000;
+        estado_atual = 3'b000;
+        
+        case(estadoA)
+            IDLE: begin
+				clr_nivel = 1'b1;
+              	clr_cnt_ex = 1'b1;
+              clr_cnt_ent = 1'b1;
+              clr_timer = 1'b1;
+              timer_enable = 1'b0;
+            end
+            EXIBICAO: begin
+              timer_enable = 1'b1;
+              sel_read_addr = 1'b0;
+              clr_cnt_ent   = 1'b1;
+              if(led_final) begin
+                inc_cnt_ex = 1'b1;
+                clr_timer = 1'b1;
+              end              
+            end
+            ENTRADA: begin
+              timer_enable = 1'b1;
+              sel_read_addr = 1'b1;
+              clr_cnt_ex = 1'b1;
+              
+              //Jogador apertou o botão certo e a rodada ainda não acabou
+              if(btn_pressionado && resultado_comparado && !fim_ent) begin
+                inc_cnt_ent = 1'b1;
+                clr_timer = 1'b1;
+              end
+              //Jogador acertou o último botão do nível atual e o jogo deve continuar
+              if(btn_pressionado && resultado_comparado && fim_ent && (nivel_atual < 4'd15)) begin
+                    inc_nivel    = 1'b1; 
+                    enable       = 1'b1; 
+                    write_enable = 1'b1; 
+                    write_adress = nivel_atual; 
+                    clr_cnt_ent  = 1'b1; 
+                    clr_timer    = 1'b1;
+                end
+            end
+            VITORIA: begin
+              clr_cnt_ex = 1'b1;
+              clr_timer = 1'b1;
+              clr_cnt_ent = 1'b1;
+              timer_enable = 1'b0;
+            end
+            DERROTA: begin
+              clr_cnt_ex = 1'b1;
+              clr_timer = 1'b1;
+              clr_cnt_ent = 1'b1;
+              timer_enable = 1'b0;
+            end
+        endcase
+    end
+endmodule
+                 
+module temporizador()
+endmodule
+
+module lfsr()
+endmodule
+
+module debouncer()
+endmodule
+
+module reg_nivel()
+endmodule
+
+module comp_seq()
+endmodule
+
+module mem_seq()
+endmodule
+
+module cnt_exib()
+endmodule
+
+module cnt_ent()
+endmodule
+
+module display()
+endmodule
+
+module top_genius()
+endmodule
