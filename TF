@@ -223,28 +223,127 @@ module temporizador(
     end
 endmodule
 
-module lfsr()
+module lfsr(
+  input enable, clk, rst,
+  output [1:0] simbolo_randomico
+);
 endmodule
 
-module debouncer()
+module debouncer(
+  input clk, rst, 
+  input [3:0] KEY,
+  output btn_pressionado,
+  output [1:0] simbolo_jogado
+);
 endmodule
 
-module reg_nivel()
+module reg_nivel(
+  input inc_nivel, clr_nivel, clk, rst,
+  output [3:0] nivel_atual
+);
 endmodule
 
-module comp_seq()
+module comp_seq(
+  input [1:0] simbolo_esperado, simbolo_jogado,
+  output resultado_comparado
+);
 endmodule
 
-module mem_seq()
+module mem_seq(
+  input write_enable,
+  input [3:0] write_adress, read_adress,
+  input [1:0] simbolo_randomico,
+  output [1:0] simbolo_esperado // read_data
+)
 endmodule
 
-module cnt_exib()
+module cnt_exib(
+  input, clk, rst, inc_cnt_ex, clr_cnt_ex,
+  input [3:0] nivel_atual,
+  output fim_ex,
+  output [3:0] ex_adress
+);
 endmodule
 
-module cnt_ent()
+module cnt_ent(
+  input, clk, rst, inc_cnt_ent, clr_cnt_ent,
+  input [3:0] nivel_atual,
+  output fim_ent,
+  output [3:0] ent_adress
+);
 endmodule
 
-module display()
+module decod_display_7seg(
+  input [3:0] SW, nivel_atual,
+  input [2:0] estado_atual,
+  input [1:0] simbolo_esperado,
+  output reg [6:0] seg, HEX0, HEX3,
+  output reg LEDR0, LEDR1, LEDR2, LEDR3
+);
+  //Decodificador 7 seguimentos
+  always @(*) begin
+        case (SW)
+            4'h0: seg = 7'b1000000; 
+            4'h1: seg = 7'b1111001; 
+            4'h2: seg = 7'b0100100; 
+            4'h3: seg = 7'b0110000; 
+            4'h4: seg = 7'b0011001; 
+            4'h5: seg = 7'b0010010; 
+            4'h6: seg = 7'b0000010; 
+            4'h7: seg = 7'b1111000; 
+            4'h8: seg = 7'b0000000; 
+            4'h9: seg = 7'b0010000; 
+            4'hA: seg = 7'b0001000; 
+            4'hB: seg = 7'b0000011; 
+            4'hC: seg = 7'b1000110; 
+            4'hD: seg = 7'b0100001; 
+            4'hE: seg = 7'b0000110; 
+            4'hF: seg = 7'b0001110; 
+            default: seg = 7'b1111111;
+        endcase
+    end
+
+    // Decodificador de estados
+    always @(*) begin
+        case (estado_atual)
+            3'd0: HEX3 = 7'b1000000; // IDLE 
+            3'd1: HEX3 = 7'b1111001; // EXIBICAO 
+            3'd2: HEX3 = 7'b0100100; // ENTRADA 
+            3'd3: HEX3 = 7'b0110000; // VITORIA 
+            3'd4: HEX3 = 7'b0011001; // DERROTA 
+            default: HEX3 = 7'b1111111; // Estado inválido
+        endcase
+    end
+
+    // Decodificador do nível atual (0 à F)
+    always @(*) begin
+        case (nivel_atual)
+            4'h0: HEX0 = 7'b1000000; 4'h1: HEX0 = 7'b1111001; 
+            4'h2: HEX0 = 7'b0100100; 4'h3: HEX0 = 7'b0110000; 
+            4'h4: HEX0 = 7'b0011001; 4'h5: HEX0 = 7'b0010010; 
+            4'h6: HEX0 = 7'b0000010; 4'h7: HEX0 = 7'b1111000; 
+            4'h8: HEX0 = 7'b0000000; 4'h9: HEX0 = 7'b0010000; 
+            4'hA: HEX0 = 7'b0001000; 4'hB: HEX0 = 7'b0000011; 
+            4'hC: HEX0 = 7'b1000110; 4'hD: HEX0 = 7'b0100001; 
+            4'hE: HEX0 = 7'b0000110; 4'hF: HEX0 = 7'b0001110; 
+            default: HEX0 = 7'b1111111;
+        endcase
+    end
+
+    always @(*) begin
+        LEDR0 = 1'b0;
+        LEDR1 = 1'b0;
+        LEDR2 = 1'b0;
+        LEDR3 = 1'b0;
+
+        if (estado_atual == 3'd1) begin // Se estiver em EXIBICAO
+            case (simbolo_esperado)
+                2'b00: LEDR0 = 1'b1;
+                2'b01: LEDR1 = 1'b1;                2'b10: LEDR2 = 1'b1;
+                2'b11: LEDR3 = 1'b1;         
+            endcase
+        end
+    end
 endmodule
 
 module top_genius()
