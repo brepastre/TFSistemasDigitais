@@ -134,7 +134,93 @@ module fsm_genius (
     end
 endmodule
                  
-module temporizador()
+module temporizador(
+  input rst, clk, clr_timer, timer_enable,
+  output reg timeout, led_final
+  );
+  //Parâmetros de tempo baseados no clock de 50MHz
+    parameter SEG1 = 26'd50_000_000;  // 50 milhões de ciclos = 1 segundo
+    parameter MS250 = 26'd12_500_000; // 12.5 milhões de ciclos = 250 ms
+
+    // Registradores para as bases de clock e contadores de eventos
+    reg [25:0] cnt_clk_seg;
+    reg [25:0] cnt_clk_led;
+    reg [5:0]  cnt_seg;             // Conta de 0 a 60 segundos
+    reg [1:0]  estagio_led;                // Conta os estágios de 250ms do LED
+
+    // Lógica do tempo de jogada (60 segundos)
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            cnt_clk_seg <= 26'd0;
+            cnt_seg <= 6'd0;
+            timeout <= 1'b0;
+        end 
+        else if (clr_timer) begin
+            cnt_clk_seg <= 26'd0;
+            cnt_seg <= 6'd0;
+            timeout <= 1'b0;
+        end 
+        else if (timer_enable) begin
+            if (cnt_seg >= 6'd60) begin // Passou dos 60 segundos, ativa timeout
+                timeout <= 1'b1;
+            end 
+            else begin
+                // Detectação da passagem de 1 segundo
+                if (cnt_clk_seg >= (SEG1 - 1)) begin
+                    cnt_clk_seg <= 26'd0;
+                    cnt_seg <= cnt_seg + 6'd1; // Incrementa 1 segundo
+                end 
+                else begin
+                    cnt_clk_seg <= cnt_clk_seg + 26'd1;
+                end
+            end
+        end
+        else begin
+            // Trava se timer_enable desativado
+            cnt_clk_seg <= 26'd0;
+        end
+    end
+
+    // Lógica de controle do tempo do LED
+    // - Estágio 0 e 1 (0ms a 500ms) com LED aceso
+    // - Estágio 2 (500ms a 750ms) com LED apagado
+    // - 750ms por símbolo antes de ativar led_final
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            cnt_clk_led <= 26'd0;
+            estagio_led <= 2'd0;
+            led_final <= 1'b0;
+        end 
+        else if (clr_timer) begin
+            cnt_clk_led <= 26'd0;
+            estagio_led <= 2'd0;
+            led_final <= 1'b0;
+        end 
+        else if (timer_enable) begin
+            led_final <= 1'b0; // Sinal de apenas um pulso de 1 clock
+            
+            // Detectação da passagem de 250 milissegundos
+            if (cnt_clk_led >= (MS250 - 1)) begin
+                cnt_clk_led <= 26'd0;
+                
+                if (estagio_led == 2'd2) begin
+                    estagio_led <= 2'd0;
+                    led_final   <= 1'b1; // Pulso de fim de ciclo para a FSM avançar
+                end 
+                else begin
+                    estagio_led <= estagio_led + 2'd1;
+                end
+            end 
+            else begin
+                cnt_clk_led <= cnt_clk_led + 26'd1;
+            end
+        end
+        else begin
+            cnt_clk_led <= 26'd0;
+            estagio_led <= 2'd0;
+            led_final <= 1'b0;
+        end
+    end
 endmodule
 
 module lfsr()
