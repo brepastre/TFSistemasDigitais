@@ -323,19 +323,54 @@ module mem_seq(
 endmodule
 
 module cnt_exib(
-  input, clk, rst, inc_cnt_ex, clr_cnt_ex,
+  input clk, rst, inc_cnt_ex, clr_cnt_ex,
   input [3:0] nivel_atual,
   output fim_ex,
-  output [3:0] ex_adress
+  output reg [3:0] ex_adress
 );
+    //Lógica do contador 
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            ex_adress <= 4'b0000;
+        end 
+        else if (clr_cnt_ex) begin
+            ex_adress <= 4'b0000;
+        end 
+        else if (inc_cnt_ex) begin
+            if (ex_adress == 4'd15) // Trava ao chegar em 15 e evitar overflow
+                ex_adress <= 4'd15;
+            else
+                ex_adress <= ex_adress + 4'd1;
+        end
+    end
+
+    assign fim_ex = (ex_adress == nivel_atual); //Detecção do fim da exibição da rodada (ativa quando o contador chega no nível atual)
 endmodule
 
 module cnt_ent(
-  input, clk, rst, inc_cnt_ent, clr_cnt_ent,
+  input clk, rst, inc_cnt_ent, clr_cnt_ent,
   input [3:0] nivel_atual,
   output fim_ent,
-  output [3:0] ent_adress
+  output reg [3:0] ent_adress
 );
+
+    //Lógica do contador 
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            ent_adress <= 4'b0000;
+        end 
+        else if (clr_cnt_ent) begin
+            ent_adress <= 4'b0000;
+        end 
+        else if (inc_cnt_ent) begin
+            if (ent_adress == 4'd15)
+                ent_adress <= 4'd15;
+            else
+                ent_adress <= ent_adress + 4'd1;
+        end
+    end
+
+    assign fim_ent = (ent_adress == nivel_atual); //Detecção do fim das jogadas obrigatórias (ativa quando o contador chega no nível atual)
 endmodule
 
 module decod_display_7seg(
