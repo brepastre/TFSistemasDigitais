@@ -227,7 +227,21 @@ module lfsr(
   input enable, clk, rst,
   output [1:0] simbolo_randomico
 );
-endmodule
+  //
+  reg [3:0] d_reg;
+  wire realimenta;
+  //
+  assign realimenta = d_reg[3]^d_reg[2];
+  //
+  always @(posedge clk or posedge rst)begin
+    if (rst) begin
+      d_reg <=4'b0001;
+    end else begin
+      d_reg <={d_reg[2:0], realimenta};
+    end
+  end
+  assign simbolo_randomico = d_reg[1:0];
+  endmodule
 
 module debouncer(
   input clk, rst, 
@@ -235,6 +249,57 @@ module debouncer(
   output btn_pressionado,
   output [1:0] simbolo_jogado
 );
+
+// Inverte a entrada para ativo em alto
+  wire [3:0] btn_ativo_alto = ~KEY;
+  //
+  reg [19:0] contador;
+  reg [3:0]  estado_estavel;
+  //
+  always @(posedge clk or posedge rst) begin
+      if (rst) begin
+          contador <= 0;
+          estado_estavel <= 0;
+      end else begin
+          //
+          if (btn_ativo_alto != estado_estavel) begin
+              contador <= contador + 1;
+              //
+              if (contador == 1000000) begin
+                  estado_estavel <= btn_ativo_alto;
+                  contador <= 0;
+              end
+          end else begin
+              // Se voltou a ser igual zera o contador
+              contador <= 0;
+          end
+      end
+  end
+
+  // Detector a borda pra garantir um pulso só
+  reg [3:0] estado_anterior;
+  always @(posedge clk or posedge rst) begin
+      if (rst) begin
+          estado_anterior <= 0;
+      end else begin
+          estado_anterior <= estado_estavel;
+      end
+  end
+  // o pulso vira 1 só quando o ciclo de clock do botão passa de 0 pra 1
+  wire [3:0] pulso_btn = estado_estavel & ~estado_anterior;
+  //
+  assign btn_pressionado = (pulso_btn != 0);
+  // encontra qual botão gerou o pulso
+  always @(posedge clk or posedge rst) begin
+      if (rst) begin
+          simbolo_jogado <= 0;
+      end else begin
+          if (pulso_btn[0]) simbolo_jogado <= 0;
+          else if (pulso_btn[1]) simbolo_jogado <= 1;
+          else if (pulso_btn[2]) simbolo_jogado <= 2;
+          else if (pulso_btn[3]) simbolo_jogado <= 3;
+      end
+  end
 endmodule
 
 module reg_nivel(
