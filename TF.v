@@ -304,8 +304,23 @@ endmodule
 
 module reg_nivel(
   input inc_nivel, clr_nivel, clk, rst,
-  output [3:0] nivel_atual
+  output reg [3:0] nivel_atual
 );
+    //Contador 
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            nivel_atual <= 4'b0000;
+        end 
+        else if (clr_nivel) begin
+            nivel_atual <= 4'b0000;
+        end 
+        else if (inc_nivel) begin
+            if (nivel_atual == 4'd15)// Trava ao chegar em 15 e evitar overflow
+                nivel_atual <= 4'd15;
+            else
+                nivel_atual <= nivel_atual + 4'd1;
+        end
+    end
 endmodule
 
 module comp_seq(
@@ -328,7 +343,7 @@ module cnt_exib(
   output fim_ex,
   output reg [3:0] ex_adress
 );
-    //Lógica do contador 
+    //Contador 
     always @(posedge clk or posedge rst) begin
         if (rst) begin
             ex_adress <= 4'b0000;
@@ -354,7 +369,7 @@ module cnt_ent(
   output reg [3:0] ent_adress
 );
 
-    //Lógica do contador 
+    //Contador 
     always @(posedge clk or posedge rst) begin
         if (rst) begin
             ent_adress <= 4'b0000;
