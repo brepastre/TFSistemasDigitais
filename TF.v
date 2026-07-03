@@ -1,4 +1,4 @@
-module fsm_genius (
+	module fsm_genius (
   input SW0, clk, rst, btn_pressionado, fim_ent, fim_ex, resultado_comparado, timeout, led_final,
   input [3:0] nivel_atual, 
   output reg enable, write_enable, sel_read_addr, clr_nivel, inc_nivel, clr_cnt_ex, inc_cnt_ex, clr_cnt_ent, inc_cnt_ent, clr_timer, timer_enable,
@@ -12,9 +12,6 @@ module fsm_genius (
     parameter DERROTA = 3'd4; 
 
     reg [2:0] estadoA, estadoP;
-  	always @(*) begin
-        estado_atual = estadoA;
-    end
   
   // Lógica de transição de estados
     always @(posedge clk or posedge rst) begin
@@ -43,13 +40,14 @@ module fsm_genius (
             ENTRADA:
               if(btn_pressionado && resultado_comparado && fim_ent && (nivel_atual < 4'd15))    
                 estadoP = EXIBICAO;
-                 else if(timeout && !btn_pressionado)         					estadoP = ENTRADA;
-                 else if(btn_pressionado && resultado_comparado && !fim_ent)
+              else if(timeout && !btn_pressionado)         					
+                estadoP = DERROTA; // Correção visual do espaçamento original
+              else if(btn_pressionado && resultado_comparado && !fim_ent)
                 estadoP = ENTRADA;
-                 else if(btn_pressionado && resultado_comparado && fim_ent && (nivel_atual == 4'd15))
+              else if(btn_pressionado && resultado_comparado && fim_ent && (nivel_atual == 4'd15))
                 estadoP = VITORIA;
-                 else if(timeout || (btn_pressionado && !resultado_comparado))
-                 estadoP = DERROTA;
+              else if(timeout || (btn_pressionado && !resultado_comparado))
+                estadoP = DERROTA;
             VITORIA:
               if(SW0)
                 estadoP = VITORIA;
@@ -79,56 +77,65 @@ module fsm_genius (
         clr_timer = 1'b0;
         timer_enable = 1'b0;
         write_adress = 4'b0000;
-        estado_atual = 3'b000;
+        estado_atual = estadoA;
         
         case(estadoA)
             IDLE: begin
-				clr_nivel = 1'b1;
-              	clr_cnt_ex = 1'b1;
-              clr_cnt_ent = 1'b1;
-              clr_timer = 1'b1;
-              timer_enable = 1'b0;
+                clr_nivel = 1'b1;
+                clr_cnt_ex = 1'b1;
+                clr_cnt_ent = 1'b1;
+                clr_timer = 1'b1;
+                timer_enable = 1'b0;
+                enable = 1'b1;
+                write_enable = 1'b0;
+                write_adress = 4'b0000;
+                
+                // Grava o primeiro elemento da sequência aleatoriamente quando inicia
+                if(SW0) begin
+                    write_enable = 1'b1;
+                end
             end
             EXIBICAO: begin
-              timer_enable = 1'b1;
-              sel_read_addr = 1'b0;
-              clr_cnt_ent   = 1'b1;
-              if(led_final) begin
-                inc_cnt_ex = 1'b1;
-                clr_timer = 1'b1;
-              end              
+                timer_enable = 1'b1;
+                sel_read_addr = 1'b0;
+                clr_cnt_ent   = 1'b1;
+                if(led_final) begin
+                    inc_cnt_ex = 1'b1;
+                    clr_timer = 1'b1;
+                end              
             end
             ENTRADA: begin
-              timer_enable = 1'b1;
-              sel_read_addr = 1'b1;
-              clr_cnt_ex = 1'b1;
-              
-              //Jogador apertou o botão certo e a rodada ainda não acabou
-              if(btn_pressionado && resultado_comparado && !fim_ent) begin
-                inc_cnt_ent = 1'b1;
-                clr_timer = 1'b1;
-              end
-              //Jogador acertou o último botão do nível atual e o jogo deve continuar
-              if(btn_pressionado && resultado_comparado && fim_ent && (nivel_atual < 4'd15)) begin
+                timer_enable = 1'b1;
+                sel_read_addr = 1'b1;
+                clr_cnt_ex = 1'b1;
+                
+                // Jogador apertou o botão certo e a rodada ainda não acabou
+                if(btn_pressionado && resultado_comparado && !fim_ent) begin
+                    inc_cnt_ent = 1'b1;
+                    clr_timer = 1'b1;
+                end
+                
+                // CRÍTICO: Adicionado "btn_pressionado" de forma estrita para evitar o salto automático de nível
+                if(btn_pressionado && resultado_comparado && fim_ent && (nivel_atual < 4'd15)) begin
                     inc_nivel    = 1'b1; 
                     enable       = 1'b1; 
                     write_enable = 1'b1; 
-                    write_adress = nivel_atual; 
+                    write_adress = nivel_atual + 4'd1; 
                     clr_cnt_ent  = 1'b1; 
                     clr_timer    = 1'b1;
                 end
             end
             VITORIA: begin
-              clr_cnt_ex = 1'b1;
-              clr_timer = 1'b1;
-              clr_cnt_ent = 1'b1;
-              timer_enable = 1'b0;
+                clr_cnt_ex = 1'b1;
+                clr_timer = 1'b1;
+                clr_cnt_ent = 1'b1;
+                timer_enable = 1'b0;
             end
             DERROTA: begin
-              clr_cnt_ex = 1'b1;
-              clr_timer = 1'b1;
-              clr_cnt_ent = 1'b1;
-              timer_enable = 1'b0;
+                clr_cnt_ex = 1'b1;
+                clr_timer = 1'b1;
+                clr_cnt_ent = 1'b1;
+                timer_enable = 1'b0;
             end
         endcase
     end
@@ -136,7 +143,8 @@ endmodule
                  
 module temporizador(
   input rst, clk, clr_timer, timer_enable,
-  output reg timeout, led_final
+  output reg timeout, led_final,
+  output led_on // Novo sinal adicionado para gerenciar a transição do LED
   );
   //Parâmetros de tempo baseados no clock de 50MHz
     parameter SEG1 = 26'd50_000_000;  // 50 milhões de ciclos = 1 segundo
@@ -146,7 +154,9 @@ module temporizador(
     reg [25:0] cnt_clk_seg;
     reg [25:0] cnt_clk_led;
     reg [5:0]  cnt_seg;             // Conta de 0 a 60 segundos
-    reg [1:0]  estagio_led;                // Conta os estágios de 250ms do LED
+    reg [1:0]  estagio_led;         // Conta os estágios de 250ms do LED
+
+    assign led_on = (estagio_led < 2'd2); // Fica ativo entre 0ms e 500ms
 
     // Lógica do tempo de jogada (60 segundos)
     always @(posedge clk or posedge rst) begin
@@ -227,50 +237,46 @@ module lfsr(
   input enable, clk, rst,
   output [1:0] simbolo_randomico
 );
-  //
   reg [3:0] d_reg;
   wire realimenta;
-  //
+  
   assign realimenta = d_reg[3]^d_reg[2];
-  //
+  
   always @(posedge clk or posedge rst)begin
     if (rst) begin
-      d_reg <=4'b0001;
-    end else begin
-      d_reg <={d_reg[2:0], realimenta};
+      d_reg <= 4'b0001;
+    end else if (enable) begin
+      d_reg <= {d_reg[2:0], realimenta};
     end
   end
   assign simbolo_randomico = d_reg[1:0];
-  endmodule
+endmodule
 
 module debouncer(
   input clk, rst, 
   input [3:0] KEY,
   output btn_pressionado,
-  output [1:0] simbolo_jogado
+  output reg [1:0] simbolo_jogado
 );
 
 // Inverte a entrada para ativo em alto
   wire [3:0] btn_ativo_alto = ~KEY;
-  //
+  
   reg [19:0] contador;
   reg [3:0]  estado_estavel;
-  //
+  
   always @(posedge clk or posedge rst) begin
       if (rst) begin
           contador <= 0;
           estado_estavel <= 0;
       end else begin
-          //
           if (btn_ativo_alto != estado_estavel) begin
               contador <= contador + 1;
-              //
               if (contador == 1000000) begin
                   estado_estavel <= btn_ativo_alto;
                   contador <= 0;
               end
           end else begin
-              // Se voltou a ser igual zera o contador
               contador <= 0;
           end
       end
@@ -285,102 +291,154 @@ module debouncer(
           estado_anterior <= estado_estavel;
       end
   end
+  
   // o pulso vira 1 só quando o ciclo de clock do botão passa de 0 pra 1
   wire [3:0] pulso_btn = estado_estavel & ~estado_anterior;
-  //
   assign btn_pressionado = (pulso_btn != 0);
-  // encontra qual botão gerou o pulso
-  always @(posedge clk or posedge rst) begin
-      if (rst) begin
-          simbolo_jogado <= 0;
-      end else begin
-          if (pulso_btn[0]) simbolo_jogado <= 0;
-          else if (pulso_btn[1]) simbolo_jogado <= 1;
-          else if (pulso_btn[2]) simbolo_jogado <= 2;
-          else if (pulso_btn[3]) simbolo_jogado <= 3;
-      end
+  
+  // CORREÇÃO: Transformado de síncrono (posedge clk) para combinacional.
+  // Agora o símbolo é entregue no mesmo instante que o pulso de botão pressionado!
+  always @(*) begin
+      if (estado_estavel[0]) simbolo_jogado = 2'd0;
+      else if (estado_estavel[1]) simbolo_jogado = 2'd1;
+      else if (estado_estavel[2]) simbolo_jogado = 2'd2;
+      else if (estado_estavel[3]) simbolo_jogado = 2'd3;
+      else simbolo_jogado = 2'd0; // Valor default de segurança
   end
 endmodule
 
 module reg_nivel(
   input inc_nivel, clr_nivel, clk, rst,
-  output [3:0] nivel_atual
+  output reg [3:0] nivel_atual
 );
+    //Contador 
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            nivel_atual <= 4'b0000;
+        end 
+        else if (clr_nivel) begin
+            nivel_atual <= 4'b0000;
+        end 
+        else if (inc_nivel) begin
+            if (nivel_atual == 4'd15)// Trava ao chegar em 15 e evitar overflow
+                nivel_atual <= 4'd15;
+            else
+                nivel_atual <= nivel_atual + 4'd1;
+        end
+    end
 endmodule
 
 module comp_seq(
   input [1:0] simbolo_esperado, simbolo_jogado,
   output resultado_comparado
 );
+    assign resultado_comparado = (simbolo_esperado == simbolo_jogado);
 endmodule
 
 module mem_seq(
-  input write_enable,
+  input write_enable, clk,
   input [3:0] write_adress, read_adress,
   input [1:0] simbolo_randomico,
   output [1:0] simbolo_esperado // read_data
-)
+);
+    reg [1:0] memoria [0:15];//16 posições de 2 bits cada
+	 
+    // Inicialização preventiva
+    integer i;
+    initial begin
+        for(i = 0; i < 16; i = i + 1)
+            memoria[i] = 2'b00;
+    end
+    
+    always @(posedge clk) begin
+        if (write_enable) begin //Escrita se habilitada pela FSM
+            memoria[write_adress] <= simbolo_randomico;
+        end
+    end
+
+    assign simbolo_esperado = memoria[read_adress]; //Leitura (dado muda conforme o endereço)
 endmodule
 
 module cnt_exib(
-  input, clk, rst, inc_cnt_ex, clr_cnt_ex,
+  input clk, rst, inc_cnt_ex, clr_cnt_ex,
   input [3:0] nivel_atual,
   output fim_ex,
-  output [3:0] ex_adress
+  output reg [3:0] ex_adress
 );
+    //Contador 
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            ex_adress <= 4'b0000;
+        end 
+        else if (clr_cnt_ex) begin
+            ex_adress <= 4'b0000;
+        end 
+        else if (inc_cnt_ex) begin
+            if (ex_adress == 4'd15) // Trava ao chegar em 15 e evitar overflow
+                ex_adress <= 4'd15;
+            else
+                ex_adress <= ex_adress + 4'd1;
+        end
+    end
+
+    assign fim_ex = (ex_adress == nivel_atual); //Detecção do fim da exibição da rodada
 endmodule
 
 module cnt_ent(
-  input, clk, rst, inc_cnt_ent, clr_cnt_ent,
+  input clk, rst, inc_cnt_ent, clr_cnt_ent,
   input [3:0] nivel_atual,
   output fim_ent,
-  output [3:0] ent_adress
+  output reg [3:0] ent_adress
 );
+
+    //Contador 
+    always @(posedge clk or posedge rst) begin
+        if (rst) begin
+            ent_adress <= 4'b0000;
+        end 
+        else if (clr_cnt_ent) begin
+            ent_adress <= 4'b0000;
+        end 
+        else if (inc_cnt_ent) begin
+            if (ent_adress == 4'd15)
+                ent_adress <= 4'd15;
+            else
+                ent_adress <= ent_adress + 4'd1;
+        end
+    end
+
+    assign fim_ent = (ent_adress == nivel_atual); //Detecção do fim das jogadas obrigatórias
 endmodule
 
 module decod_display_7seg(
-  input [3:0] SW, nivel_atual,
-  input [2:0] estado_atual,
-  input [1:0] simbolo_esperado,
-  output reg [6:0] seg, HEX0, HEX3,
-  output reg LEDR0, LEDR1, LEDR2, LEDR3
+    input [3:0] SW, nivel_atual,
+    input [2:0] estado_atual,
+    input [1:0] simbolo_esperado,
+    input led_on, // Variável do temporizador 
+    output reg [6:0] seg, HEX1, HEX0, HEX2, HEX3, 
+    output reg LEDR0, LEDR1, LEDR2, LEDR3
 );
-  //Decodificador 7 seguimentos
-  always @(*) begin
-        case (SW)
-            4'h0: seg = 7'b1000000; 
-            4'h1: seg = 7'b1111001; 
-            4'h2: seg = 7'b0100100; 
-            4'h3: seg = 7'b0110000; 
-            4'h4: seg = 7'b0011001; 
-            4'h5: seg = 7'b0010010; 
-            4'h6: seg = 7'b0000010; 
-            4'h7: seg = 7'b1111000; 
-            4'h8: seg = 7'b0000000; 
-            4'h9: seg = 7'b0010000; 
-            4'hA: seg = 7'b0001000; 
-            4'hB: seg = 7'b0000011; 
-            4'hC: seg = 7'b1000110; 
-            4'hD: seg = 7'b0100001; 
-            4'hE: seg = 7'b0000110; 
-            4'hF: seg = 7'b0001110; 
-            default: seg = 7'b1111111;
-        endcase
+    // HEX1: Mostra apenas se o SW0 estiver ativo, limpa o resto para evitar o "8" fantasma
+    always @(*) begin
+        if (SW[0]) 
+            HEX1 = 7'b1111001; // Mostra '1' se ligado
+        else 
+            HEX1 = 7'b1000000; // Mostra '0' se desligado
     end
 
-    // Decodificador de estados
+    // Decodificador de estados (HEX3)
     always @(*) begin
         case (estado_atual)
-            3'd0: HEX3 = 7'b1000000; // IDLE 
-            3'd1: HEX3 = 7'b1111001; // EXIBICAO 
-            3'd2: HEX3 = 7'b0100100; // ENTRADA 
-            3'd3: HEX3 = 7'b0110000; // VITORIA 
-            3'd4: HEX3 = 7'b0011001; // DERROTA 
-            default: HEX3 = 7'b1111111; // Estado inválido
+            3'd0: HEX3 = 7'b1000000; // 0
+            3'd1: HEX3 = 7'b1111001; // 1
+            3'd2: HEX3 = 7'b0100100; // 2
+            3'd3: HEX3 = 7'b0110000; // 3
+            3'd4: HEX3 = 7'b0011001; // 4
+            default: HEX3 = 7'b1111111;
         endcase
     end
 
-    // Decodificador do nível atual (0 à F)
+    // Decodificador do nível atual (HEX0)
     always @(*) begin
         case (nivel_atual)
             4'h0: HEX0 = 7'b1000000; 4'h1: HEX0 = 7'b1111001; 
@@ -396,20 +454,184 @@ module decod_display_7seg(
     end
 
     always @(*) begin
-        LEDR0 = 1'b0;
-        LEDR1 = 1'b0;
-        LEDR2 = 1'b0;
-        LEDR3 = 1'b0;
-
-        if (estado_atual == 3'd1) begin // Se estiver em EXIBICAO
+        HEX2 = 7'b1111111; // Sempre desligado
+    end
+     
+    // LEDs de exibição - Apagam sincronizados com o temporizador (led_on)
+    always @(*) begin
+        LEDR0 = 1'b0; LEDR1 = 1'b0; LEDR2 = 1'b0; LEDR3 = 1'b0;
+        if (estado_atual == 3'd1 && led_on) begin 
             case (simbolo_esperado)
                 2'b00: LEDR0 = 1'b1;
-                2'b01: LEDR1 = 1'b1;                2'b10: LEDR2 = 1'b1;
+                2'b01: LEDR1 = 1'b1;                
+                2'b10: LEDR2 = 1'b1;
                 2'b11: LEDR3 = 1'b1;         
             endcase
         end
     end
 endmodule
 
-module top_genius()
+module top_genius(
+    input CLOCK_50,               
+    input [3:0] KEY,                 
+    input [3:0] SW, 
+    
+    output [6:0] HEX0, 
+    output [6:0] HEX1, 
+    output [6:0] HEX2, // Assinatura adicionada para evitar warnings na compilação
+    output [6:0] HEX3, 
+    output [9:0] LEDR 
+);
+    // Sinais de Condicionamento de Entrada (Debouncer e Gerador Aleatório)
+    wire btn_pressionado;
+    wire [1:0] simbolo_jogado;
+    wire [1:0] simbolo_randomico;
+
+    // Sinais de status do Datapath para a FSM
+    wire fim_ex;
+    wire fim_ent;
+    wire resultado_comparado;
+    wire timeout;
+    wire led_final;
+    wire led_on; // Novo sinal de passagem
+    wire [3:0] nivel_atual;
+
+    // Sinais de controle da FSM para o Datapath
+    wire enable;
+    wire write_enable;
+    wire sel_read_addr;
+    wire clr_nivel;
+    wire inc_nivel;
+    wire clr_cnt_ex;
+    wire inc_cnt_ex;
+    wire clr_cnt_ent;
+    wire inc_cnt_ent;
+    wire clr_timer;
+    wire timer_enable;
+    wire [3:0] write_adress;
+    wire [2:0] estado_atual;
+
+    // Fios de endereçamento
+    wire [3:0] ex_adress;
+    wire [3:0] ent_adress;
+    wire [3:0] read_adress;
+    wire [1:0] simbolo_esperado;
+
+    wire rst_sistema = SW[1]; 
+
+    // Multiplexador de endereço de leitura (0 = endereço do contador de exibição; 1 = endereço do contador de entradas)
+    assign read_adress = (sel_read_addr) ? ent_adress : ex_adress;
+
+    debouncer u_debouncer (
+        .clk(CLOCK_50),
+        .rst(rst_sistema),
+        .KEY(KEY),
+        .btn_pressionado(btn_pressionado),
+        .simbolo_jogado(simbolo_jogado)
+    );
+
+    lfsr u_lfsr (
+        .enable(1'b1), // Roda de forma síncrona sem travar para aleatoriedade natural
+        .clk(CLOCK_50),
+        .rst(rst_sistema),
+        .simbolo_randomico(simbolo_randomico)
+    );
+
+    temporizador u_temporizador (
+        .clk(CLOCK_50),
+        .rst(rst_sistema),
+        .clr_timer(clr_timer),
+        .timer_enable(timer_enable),
+        .timeout(timeout),
+        .led_final(led_final),
+        .led_on(led_on) // Recebe o estado interno
+    );
+
+    reg_nivel u_reg_nivel (
+        .clk(CLOCK_50),
+        .rst(rst_sistema),
+        .inc_nivel(inc_nivel),
+        .clr_nivel(clr_nivel),
+        .nivel_atual(nivel_atual)
+    );
+
+    cnt_exib u_cnt_exib (
+        .clk(CLOCK_50),
+        .rst(rst_sistema),
+        .inc_cnt_ex(inc_cnt_ex),
+        .clr_cnt_ex(clr_cnt_ex),
+        .nivel_atual(nivel_atual),
+        .fim_ex(fim_ex),
+        .ex_adress(ex_adress)
+    );
+
+    cnt_ent u_cnt_ent (
+        .clk(CLOCK_50),
+        .rst(rst_sistema),
+        .inc_cnt_ent(inc_cnt_ent),
+        .clr_cnt_ent(clr_cnt_ent),
+        .nivel_atual(nivel_atual),
+        .fim_ent(fim_ent),
+        .ent_adress(ent_adress)
+    );
+
+    mem_seq u_mem_seq (
+        .clk(CLOCK_50), 
+        .write_enable(write_enable),
+        .write_adress(write_adress),
+        .read_adress(read_adress),
+        .simbolo_randomico(simbolo_randomico),
+        .simbolo_esperado(simbolo_esperado)
+    );
+
+    comp_seq u_comp_seq (
+        .simbolo_esperado(simbolo_esperado),
+        .simbolo_jogado(simbolo_jogado),
+        .resultado_comparado(resultado_comparado)
+    );
+
+     fsm_genius u_fsm_genius (
+        .clk(CLOCK_50),
+        .rst(rst_sistema),
+        .SW0(SW[0]), 
+        .btn_pressionado(btn_pressionado),
+        .fim_ent(fim_ent),
+        .fim_ex(fim_ex),
+        .resultado_comparado(resultado_comparado),
+        .timeout(timeout),
+        .led_final(led_final),
+        .nivel_atual(nivel_atual),
+        .enable(enable),
+        .write_enable(write_enable),
+        .sel_read_addr(sel_read_addr),
+        .clr_nivel(clr_nivel),
+        .inc_nivel(inc_nivel),
+        .clr_cnt_ex(clr_cnt_ex),
+        .inc_cnt_ex(inc_cnt_ex),
+        .clr_cnt_ent(clr_cnt_ent),
+        .inc_cnt_ent(inc_cnt_ent),
+        .clr_timer(clr_timer),
+        .timer_enable(timer_enable),
+        .write_adress(write_adress),
+        .estado_atual(estado_atual)
+    );
+
+decod_display_7seg u_decod_saidas (
+        .SW(SW),
+        .nivel_atual(nivel_atual),
+        .estado_atual(estado_atual),
+        .simbolo_esperado(simbolo_esperado),
+        .led_on(led_on), 
+        .HEX1(HEX1),   // <- O Quartus estava reclamando desta linha. Agora está conectando HEX1 com HEX1.
+        .HEX0(HEX0),
+        .HEX2(HEX2),
+        .HEX3(HEX3),
+        .LEDR0(LEDR[0]),
+        .LEDR1(LEDR[1]),
+        .LEDR2(LEDR[2]),
+        .LEDR3(LEDR[3])
+    );
+
+    // Desliga ou zera as portas restantes do barramento de LEDs físicos da placa
+    assign LEDR[9:4] = 6'b000000;
 endmodule
