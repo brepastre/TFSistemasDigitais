@@ -79,7 +79,7 @@ module fsm_genius (
         clr_timer = 1'b0;
         timer_enable = 1'b0;
         write_adress = 4'b0000;
-        estado_atual = 3'b000;
+        estado_atual = estadoA;
         
         case(estadoA)
             IDLE: begin
@@ -247,7 +247,7 @@ module debouncer(
   input clk, rst, 
   input [3:0] KEY,
   output btn_pressionado,
-  output [1:0] simbolo_jogado
+  output reg [1:0] simbolo_jogado
 );
 
 // Inverte a entrada para ativo em alto
@@ -327,14 +327,24 @@ module comp_seq(
   input [1:0] simbolo_esperado, simbolo_jogado,
   output resultado_comparado
 );
+    assign resultado_comparado = (simbolo_esperado == simbolo_jogado);
 endmodule
 
 module mem_seq(
-  input write_enable,
+  input write_enable, clk,
   input [3:0] write_adress, read_adress,
   input [1:0] simbolo_randomico,
   output [1:0] simbolo_esperado // read_data
-)
+);
+    reg [1:0] memoria [0:15];//16 posições de 2 bits cada
+
+    always @(posedge clk) begin
+        if (write_enable) begin //Escrita se habilitada pela FSM
+            memoria[write_adress] <= simbolo_randomico;
+        end
+    end
+
+    assign simbolo_esperado = memoria[read_adress]; //Leitura (dado muda conforme o endereço)
 endmodule
 
 module cnt_exib(
@@ -461,5 +471,165 @@ module decod_display_7seg(
     end
 endmodule
 
-module top_genius()
+module top_genius(
+    input CLOCK_50,               
+    input [3:0] KEY,                 
+    input [3:0] SW, //(SW[0] serve para ligar/iniciar o jogo)
+    
+    output [6:0] HEX0, //Exibe o nível atual do jogo (0 à F)
+    output [6:0] HEX3, //Exibe o estado da FSM (0 à 4)
+    output [9:0] LEDR, //Mapeamento dos LEDs nos pinos LEDR[3:0]
+    output [6:0] HEX1 //Saída das chaves SW
+);
+    // Sinais de Condicionamento de Entrada (Debouncer e Gerador Aleatório)
+    wire btn_pressionado;
+    wire [1:0] simbolo_jogado;
+    wire [1:0] simbolo_randomico;
+
+    // Sinais de status do Datapath para a FSM
+    wire fim_ex;
+    wire fim_ent;
+    wire resultado_comparado;
+    wire timeout;
+    wire led_final;
+    wire [3:0] nivel_atual;
+
+    // Sinais de controle da FSM para o Datapath
+    wire enable;
+    wire write_enable;
+    wire sel_read_addr;
+    wire clr_nivel;
+    wire inc_nivel;
+    wire clr_cnt_ex;
+    wire inc_cnt_ex;
+    wire clr_cnt_ent;
+    wire inc_cnt_ent;
+    wire clr_timer;
+    wire timer_enable;
+    wire [3:0] write_adress;
+    wire [2:0] estado_atual;
+
+    // Fios de endereçamento
+    wire [3:0] ex_adress;
+    wire [3:0] ent_adress;
+    wire [3:0] read_adress;
+    wire [1:0] simbolo_esperado;
+
+    // O rst global do circuito será mapeado no KEY[0] invertido, ou via rst dedicado da FSM.
+    // Para manter o padrão do seu código (ativo em alto), usamos o rst do sistema:
+    wire rst_sistema = SW[1]; // Exemplo: SW[1] como reset manual, ou use ~KEY[0] se preferir
+
+    
+    // Multiplexador de endereço de leitura (0 = endereço do contador de exibição; 1 = endereço do contador de entradas)
+    assign read_adress = (sel_read_addr) ? ent_adress : ex_adress;
+
+    debouncer u_debouncer (
+        .clk(CLOCK_50),
+        .rst(rst_sistema),
+        .KEY(KEY),
+        .btn_pressionado(btn_pressionado),
+        .simbolo_jogado(simbolo_jogado)
+    );
+
+    lfsr u_lfsr (
+        .enable(enable),
+        .clk(CLOCK_50),
+        .rst(rst_sistema),
+        .simbolo_randomico(simbolo_randomico)
+    );
+
+    temporizador u_temporizador (
+        .clk(CLOCK_50),
+        .rst(rst_sistema),
+        .clr_timer(clr_timer),
+        .timer_enable(timer_enable),
+        .timeout(timeout),
+        .led_final(led_final)
+    );
+
+    reg_nivel u_reg_nivel (
+        .clk(CLOCK_50),
+        .rst(rst_sistema),
+        .inc_nivel(inc_nivel),
+        .clr_nivel(clr_nivel),
+        .nivel_atual(nivel_atual)
+    );
+
+    cnt_exib u_cnt_exib (
+        .clk(CLOCK_50),
+        .rst(rst_sistema),
+        .inc_cnt_ex(inc_cnt_ex),
+        .clr_cnt_ex(clr_cnt_ex),
+        .nivel_atual(nivel_atual),
+        .fim_ex(fim_ex),
+        .ex_adress(ex_adress)
+    );
+
+    cnt_ent u_cnt_ent (
+        .clk(CLOCK_50),
+        .rst(rst_sistema),
+        .inc_cnt_ent(inc_cnt_ent),
+        .clr_cnt_ent(clr_cnt_ent),
+        .nivel_atual(nivel_atual),
+        .fim_ent(fim_ent),
+        .ent_adress(ent_adress)
+    );
+
+    mem_seq u_mem_seq (
+        .clk(CLOCK_50), // Adicionado para corrigir a sincronia de escrita de dados
+        .write_enable(write_enable),
+        .write_adress(write_adress),
+        .read_adress(read_adress),
+        .simbolo_randomico(simbolo_randomico),
+        .simbolo_esperado(simbolo_esperado)
+    );
+
+    comp_seq u_comp_seq (
+        .simbolo_esperado(simbolo_esperado),
+        .simbolo_jogado(simbolo_jogado),
+        .resultado_comparado(resultado_comparado)
+    );
+
+     fsm_genius u_fsm_genius (
+        .clk(CLOCK_50),
+        .rst(rst_sistema),
+        .SW0(SW[0]), // Chave mapeada para iniciar/manter o fluxo do jogo ativo
+        .btn_pressionado(btn_pressionado),
+        .fim_ent(fim_ent),
+        .fim_ex(fim_ex),
+        .resultado_comparado(resultado_comparado),
+        .timeout(timeout),
+        .led_final(led_final),
+        .nivel_atual(nivel_atual),
+        .enable(enable),
+        .write_enable(write_enable),
+        .sel_read_addr(sel_read_addr),
+        .clr_nivel(clr_nivel),
+        .inc_nivel(inc_nivel),
+        .clr_cnt_ex(clr_cnt_ex),
+        .inc_cnt_ex(inc_cnt_ex),
+        .clr_cnt_ent(clr_cnt_ent),
+        .inc_cnt_ent(inc_cnt_ent),
+        .clr_timer(clr_timer),
+        .timer_enable(timer_enable),
+        .write_adress(write_adress),
+        .estado_atual(estado_atual)
+    );
+
+    decod_display_7seg u_decod_saidas (
+        .SW(SW),
+        .nivel_atual(nivel_atual),
+        .estado_atual(estado_atual),
+        .simbolo_esperado(simbolo_esperado),
+        .seg(HEX1), // Envia a decodificação das chaves genéricas SW para o display HEX1
+        .HEX0(HEX0),
+        .HEX3(HEX3),
+        .LEDR0(LEDR[0]),
+        .LEDR1(LEDR[1]),
+        .LEDR2(LEDR[2]),
+        .LEDR3(LEDR[3])
+    );
+
+    // Desliga ou zera as portas restantes do barramento de LEDs físicos da placa
+    assign LEDR[9:4] = 6'b000000;
 endmodule
